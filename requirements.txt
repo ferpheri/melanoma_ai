@@ -4,3 +4,5 @@ jinja2
 pillow
 torch
 torchvision
+gdown
+gradio
