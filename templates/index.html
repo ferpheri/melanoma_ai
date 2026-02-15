@@ -1,0 +1,314 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Melanoma Detection AI</title>
+<style>
+    body {
+        margin: 0;
+        font-family: 'Segoe UI', sans-serif;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .container {
+        background: white;
+        padding: 30px;
+
+        border-radius: 16px;
+        width: 420px;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+        text-align: center;
+    }
+
+    /* Upload Area Styling */
+    .upload-area {
+        position: relative;
+        border: 2px dashed #ccc;
+        border-radius: 12px;
+        height: 250px; /* Fixed height for consistency */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: 0.3s;
+        background: #fafafa;
+        overflow: hidden;
+    }
+
+    .upload-area:hover, .upload-area.dragover {
+        border-color: #667eea;
+        background: #eef2ff;
+    }
+
+    /* The text inside the box */
+    .upload-text {
+        color: #888;
+        pointer-events: none; /* Let clicks pass through to label */
+        transition: opacity 0.2s;
+    }
+
+    /* The image preview inside the box */
+    .preview-img {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover; /* Fill the box nicely */
+        display: none;
+        z-index: 5;
+    }
+
+    /* The "X" Remove Button */
+    .remove-btn {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: rgba(0, 0, 0, 0.6);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        cursor: pointer;
+        display: none;
+        z-index: 10;
+        font-weight: bold;
+        line-height: 1;
+    }
+    
+    .remove-btn:hover {
+        background: rgba(255, 0, 0, 0.8);
+    }
+
+    select, .analyze-btn {
+        margin-top: 15px;
+        padding: 12px;
+        width: 100%;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+        font-size: 14px;
+    }
+
+    .analyze-btn {
+        background: #667eea;
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-weight: 600;
+        transition: 0.3s;
+    }
+
+    .analyze-btn:hover { background: #5a67d8; }
+
+    /* Result Section */
+    .result-box {
+        margin-top: 20px;
+        padding: 15px;
+        border-radius: 8px;
+        background: #f8f9fa;
+        text-align: left;
+    }
+
+    .result-header {
+        font-weight: bold;
+        font-size: 16px;
+        margin-bottom: 8px;
+        display: block;
+    }
+
+    .progress-track {
+        background: #e0e0e0;
+        border-radius: 10px;
+        height: 10px;
+        width: 100%;
+        overflow: hidden;
+    }
+
+    .progress-fill {
+        height: 100%;
+        transition: width 0.6s ease;
+    }
+    
+    /* Dynamic Colors */
+    .safe { background: #2ecc71; }    /* Green */
+    .warning { background: #f1c40f; } /* Yellow */
+    .danger { background: #e74c3c; }  /* Red */
+
+    .loading {
+        display: none;
+        margin-top: 10px;
+        font-size: 14px;
+        color: #666;
+
+    }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Skin Lesion Analyzer</h2>
+    <div style="margin-bottom:10px; border-top: 1px solid #8f8e8e; font-size: 11px; color: #666; line-height: 1.4;">
+    <strong>Disclaimer:</strong><br>
+    This tool is a research prototype and is not a medical diagnostic system. 
+    Predictions may be inaccurate. Do not rely on this result for medical decisions. 
+</div>
+    <form id="uploadForm" method="post" enctype="multipart/form-data">
+        
+        <label class="upload-area" id="dropArea">
+            <input type="file" name="file" id="fileInput" hidden accept="image/*">
+            <input type="hidden" name="existing_image" id="existingImage">
+            <div class="upload-text" id="uploadText">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:block; margin: 0 auto 10px auto;">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <span>Click or Drag Image Here</span>
+                
+            </div>
+
+            <img id="preview" class="preview-img" src="{{ image_data if image_data else '' }}">
+            
+            <button type="button" class="remove-btn" id="removeBtn" title="Remove image">✕</button>
+        </label>
+
+        <select name="model_choice">
+            <option value="mobilenet" {% if model_choice == 'mobilenet' %} selected {% endif %}>MobileNetV2 (Recommended)</option>
+            <option value="resnet" {% if model_choice == 'resnet' %} selected {% endif %}>ResNet18</option>
+            <option value="efficientnet" {% if model_choice == 'efficientnet' %} selected {% endif %}>EfficientNet-B0</option>
+        </select>
+
+        <button type="submit" class="analyze-btn">Analyze Lesion</button>
+    </form>
+
+    <div class="loading" id="loading">Processing...</div>
+
+    {% if result %}
+    <div class="result-box">
+        <span class="result-header">{{ result }}</span>
+        <div class="progress-track">
+            <div class="progress-fill 
+                {% if probability < 40 %} safe 
+                {% elif probability < 70 %} warning 
+                {% else %} danger {% endif %}" 
+                style="width: {{ probability|default(0) }}%;">
+            </div>
+        </div>
+        <div style="font-size: 12px; color: #666; margin-top: 5px;">
+            Probability: {{ "%.2f"|format(probability) }}%
+        </div>
+    </div>
+    {% endif %}
+    
+</div>
+
+<script>
+    const fileInput = document.getElementById("fileInput");
+    const preview = document.getElementById("preview");
+    const removeBtn = document.getElementById("removeBtn");
+    const uploadText = document.getElementById("uploadText");
+    const dropArea = document.getElementById("dropArea");
+    const form = document.getElementById("uploadForm");
+    const loading = document.getElementById("loading");
+
+    // Check if image exists on load (from server)
+    if (preview.getAttribute('src') && preview.getAttribute('src').length > 5) {
+        showPreview();
+    }
+
+    function showPreview() {
+        preview.style.display = "block";
+        removeBtn.style.display = "block";
+        uploadText.style.opacity = "0"; // Hide text
+    }
+
+    function resetPreview() {
+        fileInput.value = ""; // Clear file input
+        preview.src = "";
+        preview.style.display = "none";
+        removeBtn.style.display = "none";
+        uploadText.style.opacity = "1"; // Show text
+        
+        // Optional: Remove result box if you want to clear results on remove
+        const resultBox = document.querySelector('.result-box');
+        if(resultBox) resultBox.style.display = 'none';
+    }
+
+    // Handle File Selection
+    fileInput.onchange = () => {
+        if (fileInput.files && fileInput.files[0]) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                preview.src = e.target.result;
+                showPreview();
+            }
+            reader.readAsDataURL(fileInput.files[0]);
+        }
+    };
+
+    // Handle Remove Button
+    removeBtn.onclick = (e) => {
+        e.preventDefault(); // Prevent opening file dialog
+        e.stopPropagation(); // Stop bubbling
+        resetPreview();
+    };
+
+    // Drag and Drop Events
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    // Highlight on drag
+    ['dragenter', 'dragover'].forEach(name => {
+        dropArea.addEventListener(name, () => dropArea.classList.add('dragover'), false);
+    });
+
+    ['dragleave', 'drop'].forEach(name => {
+        dropArea.addEventListener(name, () => dropArea.classList.remove('dragover'), false);
+    });
+
+    // Handle Drop
+    dropArea.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        
+        if(files.length > 0) {
+            fileInput.files = files; // Set input files
+            // Trigger change manually
+            const event = new Event('change');
+            fileInput.dispatchEvent(event);
+        }
+    }, false);
+
+    form.onsubmit = (e) => {
+        const hasFile = fileInput.files.length > 0;
+        const hasExisting = preview.src.includes('data:image');
+
+        if (!hasFile && !hasExisting) {
+            alert("Please upload an image first");
+            e.preventDefault();
+            return;
+        }
+
+        // If user didn't upload new file, send the existing image to backend
+        if (!hasFile && hasExisting) {
+            document.getElementById("existingImage").value = preview.src;
+        }
+
+        loading.style.display = "block";
+    };
+</script>
+
+</body>
+</html>
